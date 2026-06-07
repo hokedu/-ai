@@ -43,8 +43,10 @@ wss.on('connection', (ws) => {
 
       switch (msg.type) {
         case 'interim': {
+          const sourceLang = msg.sourceLanguage || 'en-US';
+          session.sourceLanguage = sourceLang;
           session.interimCache = msg.text;
-          const quick = await translateEngine.translateQuick(msg.text);
+          const quick = await translateEngine.translateQuick(msg.text, sourceLang);
           ws.send(JSON.stringify({
             type: 'translation',
             mode: 'interim',
@@ -59,6 +61,8 @@ wss.on('connection', (ws) => {
         case 'final': {
           const source = msg.text;
           const id = msg.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const sourceLang = msg.sourceLanguage || session.sourceLanguage || 'en-US';
+          session.sourceLanguage = sourceLang;
 
           session.contextWindow.push(source);
           if (session.contextWindow.length > 8) {
@@ -67,7 +71,8 @@ wss.on('connection', (ws) => {
 
           const translation = await translateEngine.translateWithContext(
             source,
-            session.contextWindow.slice(0, -1)
+            session.contextWindow.slice(0, -1),
+            sourceLang
           );
 
           const confidence = translateEngine.estimateConfidence(source, translation);
@@ -86,7 +91,8 @@ wss.on('connection', (ws) => {
             const corrections = await correctionEngine.checkAndCorrect(
               session.history,
               session.contextWindow,
-              translateEngine
+              translateEngine,
+              sourceLang
             );
 
             for (const c of corrections) {

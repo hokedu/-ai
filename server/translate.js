@@ -6,14 +6,25 @@ export class TranslationEngine {
     this.termCache = new Map();
   }
 
-  buildSystemPrompt() {
+  /**
+   * Language display names and target mapping.
+   */
+  static LANG_MAP = {
+    'en-US': { name: 'English', target: 'Chinese' },
+    'ja-JP': { name: 'Japanese', target: 'Chinese' },
+    'ko-KR': { name: 'Korean', target: 'Chinese' },
+    'zh-CN': { name: 'Chinese', target: 'English' },
+  };
+
+  buildSystemPrompt(sourceLanguage = 'en-US') {
+    const lang = TranslationEngine.LANG_MAP[sourceLanguage] || TranslationEngine.LANG_MAP['en-US'];
     return `You are a professional simultaneous interpreter for technical conferences.
-Your task is to translate English speech into fluent, natural Chinese in real-time.
+Your task is to translate ${lang.name} speech into fluent, natural ${lang.target} in real-time.
 
 RULES:
-1. Output ONLY the Chinese translation — no explanations, no notes, no prefixes
-2. Maintain consistency: same English term → same Chinese translation throughout
-3. For technical terms, use standard Chinese technical translations
+1. Output ONLY the ${lang.target} translation — no explanations, no notes, no prefixes
+2. Maintain consistency: same ${lang.name} term → same ${lang.target} translation throughout
+3. For technical terms, use standard ${lang.target} technical translations
 4. Preserve speaker tone: formal for keynotes, relaxed for casual talks
 5. If the input is incomplete or fragmented, translate what you can naturally
 6. Handle pronouns correctly based on provided context
@@ -23,9 +34,10 @@ RULES:
   /**
    * Fast translation for interim speech results (low latency priority).
    */
-  async translateQuick(text) {
+  async translateQuick(text, sourceLanguage = 'en-US') {
     if (!text || text.trim().length === 0) return '';
 
+    const lang = TranslationEngine.LANG_MAP[sourceLanguage] || TranslationEngine.LANG_MAP['en-US'];
     try {
       const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
         method: 'POST',
@@ -36,7 +48,7 @@ RULES:
         body: JSON.stringify({
           model: this.model,
           messages: [
-            { role: 'system', content: 'Translate English to Chinese. Output ONLY the Chinese text. Be fast and direct.' },
+            { role: 'system', content: `Translate ${lang.name} to ${lang.target}. Output ONLY the ${lang.target} text. Be fast and direct.` },
             { role: 'user', content: text }
           ],
           max_tokens: 200,
@@ -60,12 +72,13 @@ RULES:
   /**
    * Full context-aware translation using sliding window of previous sentences.
    */
-  async translateWithContext(text, contextSentences = []) {
+  async translateWithContext(text, contextSentences = [], sourceLanguage = 'en-US') {
     if (!text || text.trim().length === 0) return '';
 
+    const lang = TranslationEngine.LANG_MAP[sourceLanguage] || TranslationEngine.LANG_MAP['en-US'];
     try {
       const messages = [
-        { role: 'system', content: this.buildSystemPrompt() }
+        { role: 'system', content: this.buildSystemPrompt(sourceLanguage) }
       ];
 
       if (contextSentences.length > 0) {
@@ -74,12 +87,12 @@ RULES:
           .join('\n');
         messages.push({
           role: 'user',
-          content: `Context (previous sentences in this talk):\n${contextBlock}\n\nTranslate this new sentence to Chinese: "${text}"`
+          content: `Context (previous sentences in this talk):\n${contextBlock}\n\nTranslate this new ${lang.name} sentence to ${lang.target}: "${text}"`
         });
       } else {
         messages.push({
           role: 'user',
-          content: `Translate to Chinese: "${text}"`
+          content: `Translate to ${lang.target}: "${text}"`
         });
       }
 
@@ -114,11 +127,12 @@ RULES:
    * Re-translate a previous sentence with expanded context window.
    * Core of the auto-correction pipeline.
    */
-  async retranslateWithNewContext(text, fullContextWindow) {
+  async retranslateWithNewContext(text, fullContextWindow, sourceLanguage = 'en-US') {
     if (!text || !fullContextWindow || fullContextWindow.length === 0) {
-      return this.translateQuick(text);
+      return this.translateQuick(text, sourceLanguage);
     }
 
+    const lang = TranslationEngine.LANG_MAP[sourceLanguage] || TranslationEngine.LANG_MAP['en-US'];
     try {
       const contextBlock = fullContextWindow
         .filter(s => s !== text)
@@ -126,7 +140,7 @@ RULES:
         .join('\n');
 
       const messages = [
-        { role: 'system', content: this.buildSystemPrompt() },
+        { role: 'system', content: this.buildSystemPrompt(sourceLanguage) },
         {
           role: 'user',
           content: `With this full context now available:\n${contextBlock}\n\nRe-translate this sentence with the new context for better accuracy: "${text}"`

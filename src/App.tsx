@@ -72,7 +72,7 @@ function App() {
       // onInterim
       (text: string) => {
         const id = 'interim-current';
-        sendMessageRef.current({ type: 'interim', id, text });
+        sendMessageRef.current({ type: 'interim', id, text, sourceLanguage: language });
         setSubtitleEntries((prev) => {
           const entry: SubtitleEntry = {
             id, source: text, translation: '识别中...',
@@ -86,7 +86,7 @@ function App() {
       // onFinal
       (text: string) => {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        sendMessageRef.current({ type: 'final', id, text });
+        sendMessageRef.current({ type: 'final', id, text, sourceLanguage: language });
         setSubtitleEntries((prev) => prev.filter((e) => e.id !== 'interim-current'));
       }
     );
@@ -133,13 +133,19 @@ function App() {
           <div className="lang-selector">
             <label>
               源语言：
-              <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                disabled={isListening}
+                title={isListening ? '请先停止翻译再切换语言' : '选择源语言'}
+              >
                 <option value="en-US">English</option>
                 <option value="ja-JP">日本語</option>
                 <option value="ko-KR">한국어</option>
                 <option value="zh-CN">中文</option>
               </select>
             </label>
+            {isListening && <span className="lang-locked-hint">停止翻译后可切换</span>}
           </div>
         </div>
       </header>

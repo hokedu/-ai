@@ -46,6 +46,8 @@ button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Lang selector */
 .lang-selector label { display: flex; align-items: center; gap: 8px; color: #94a3b8; font-size: 0.88rem; }
 .lang-selector select { border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: #e2e8f0; padding: 8px 10px; font-size: 0.88rem; }
+.lang-selector select:disabled { opacity: 0.45; cursor: not-allowed; }
+.lang-locked-hint { color: var(--warn); font-size: 0.78rem; margin-left: 4px; }
 
 /* Subtitle Overlay */
 .subtitle-overlay { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px; margin-bottom: 24px; min-height: 180px; position: relative; overflow: hidden; }

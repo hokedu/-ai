@@ -11,7 +11,7 @@ export class CorrectionEngine {
    *   1. Re-translate with expanded context (new later sentences clarify earlier ones)
    *   2. Enforce terminology consistency across the session
    */
-  async checkAndCorrect(history, contextWindow, translateEngine) {
+  async checkAndCorrect(history, contextWindow, translateEngine, sourceLanguage = 'en-US') {
     const now = Date.now();
 
     if (now - this.lastCorrectionTime < this.minInterval) {
@@ -30,7 +30,8 @@ export class CorrectionEngine {
       // Strategy 1: Re-translate with expanded context
       const newTranslation = await translateEngine.retranslateWithNewContext(
         entry.source,
-        contextWindow
+        contextWindow,
+        sourceLanguage
       );
 
       if (newTranslation && this.isMeaningfullyDifferent(entry.translation, newTranslation)) {
