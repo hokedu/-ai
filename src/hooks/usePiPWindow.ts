@@ -45,7 +45,7 @@ function buildPiPHtml(): string {
     flex-shrink: 0;
   }
   .pip-title {
-    font-size: 12px;
+    font-size: clamp(10px, 1.5vw, 13px);
     font-weight: 600;
     color: #f4f4f5;
     display: flex;
@@ -53,7 +53,7 @@ function buildPiPHtml(): string {
     gap: 6px;
   }
   .pip-count {
-    font-size: 10px;
+    font-size: clamp(8px, 1.2vw, 10px);
     color: #a1a1aa;
     background: rgba(255, 255, 255, 0.08);
     padding: 1px 6px;
@@ -74,7 +74,7 @@ function buildPiPHtml(): string {
     border-radius: 5px;
     background: transparent;
     color: #a1a1aa;
-    font-size: 13px;
+    font-size: clamp(11px, 1.6vw, 14px);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -98,7 +98,7 @@ function buildPiPHtml(): string {
   .pip-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
   .pip-empty {
     color: #71717a;
-    font-size: 12px;
+    font-size: clamp(10px, 1.5vw, 13px);
     text-align: center;
     padding: 20px 0;
   }
@@ -116,11 +116,11 @@ function buildPiPHtml(): string {
     to { opacity: 1; transform: translateY(0); }
   }
   .pip-time {
-    font-size: 9px;
+    font-size: clamp(7px, 1vw, 9px);
     color: #71717a;
   }
   .pip-text {
-    font-size: 13px;
+    font-size: clamp(11px, 1.6vw, 14px);
     color: #f4f4f5;
     line-height: 1.4;
     word-break: break-word;

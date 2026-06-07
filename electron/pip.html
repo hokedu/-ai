@@ -43,7 +43,7 @@
     cursor: move;
   }
   .pip-title {
-    font-size: 12px;
+    font-size: clamp(10px, 1.5vw, 13px);
     font-weight: 600;
     color: #f4f4f5;
     display: flex;
@@ -51,7 +51,7 @@
     gap: 6px;
   }
   .pip-count {
-    font-size: 10px;
+    font-size: clamp(8px, 1.2vw, 10px);
     color: #a1a1aa;
     background: rgba(255, 255, 255, 0.08);
     padding: 1px 7px;
@@ -72,7 +72,7 @@
     border-radius: 6px;
     background: transparent;
     color: #a1a1aa;
-    font-size: 13px;
+    font-size: clamp(11px, 1.6vw, 14px);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -97,7 +97,7 @@
 
   .pip-empty {
     color: #71717a;
-    font-size: 12px;
+    font-size: clamp(10px, 1.5vw, 13px);
     text-align: center;
     padding: 28px 0;
   }
@@ -116,11 +116,11 @@
     to   { opacity: 1; transform: translateY(0); }
   }
   .pip-time {
-    font-size: 9px;
+    font-size: clamp(7px, 1vw, 9px);
     color: #71717a;
   }
   .pip-text {
-    font-size: 13px;
+    font-size: clamp(11px, 1.6vw, 14px);
     color: #f4f4f5;
     line-height: 1.45;
     word-break: break-word;
