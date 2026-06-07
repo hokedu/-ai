@@ -16,7 +16,7 @@
 → 新建翻译会话 → UI界面重构
 → 麦克风音量可视化修复 → 系统音频传译
 → 背景图玻璃态UI → 产品文档 → 代码健壮性增强
-→ 情感分析+TTS朗读 → 跨标签页悬浮窗(PiP)
+→ 情感分析 → 跨标签页悬浮窗(PiP)
 → Electron桌面客户端 → AI会议摘要 → 导航栏自适应
 ```
 
@@ -27,7 +27,7 @@
 | 功能演示 | 链接 |
 |---------|------|
 
-| 悬浮窗 + AI 摘要 + 情感TTS | [演示视频 v2](https://www.bilibili.com/video/BV1JEEh6TEMp/) |
+| 悬浮窗 + AI 摘要 | [演示视频 v2](https://www.bilibili.com/video/BV1JEEh6TEMp/) |
 
 ## 核心功能
 
@@ -38,7 +38,7 @@
 - **双通道翻译** — Interim快速翻译 + Final精确翻译
 - **术语一致性** — 自动检测并统一同一术语的翻译
 - **情感分析** — DeepSeek 检测源语言情绪（8种：开心/悲伤/愤怒/紧迫/平静/中性/兴奋/困惑）
-- **情感保留TTS朗读** — 浏览器 SpeechSynthesis 根据情绪调制语速/音调/音量，一键播放译文
+- 
 - **跨标签页悬浮字幕窗** — Document Picture-in-Picture API，翻译字幕置顶浮窗，切换页面不中断
 - **AI 会议摘要** — 收藏的字幕一键生成简洁会议纪要（提炼3-6个核心要点）
 - **Electron 桌面客户端** — 无边框透明置顶浮窗，alwaysOnTop 覆盖腾讯会议等应用
@@ -47,7 +47,7 @@
 ## 技术架构
 
 ```
-浏览器 (React + Web Speech API + SpeechSynthesis)
+浏览器 (React + Web Speech API)
     ↕ WebSocket 实时双向通信
 Node.js 服务端
     ├── 会话管理 (上下文滑动窗口)
@@ -65,7 +65,7 @@ Node.js 服务端
 4. final: 带上下文的AI翻译 (高质量)
 5. 异步情感分析 → 推送 emotion 标签到前端
 6. 纠错引擎: 新上下文→重译旧句→推送修正
-7. 前端: 实时字幕 + 修正动画 + 情感标签 + 🔊 TTS 朗读
+7. 前端: 实时字幕 + 修正动画
 8. 悬浮窗: Document PiP 跨标签页显示翻译字幕
 9. 收藏摘要: POST /api/summarize → DeepSeek 生成会议纪要
 
@@ -157,7 +157,6 @@ UI 展示：旧译文红色删除线 → 新译文绿色滑入 + 修正原因标
 | 回写式纠错 | 后续信息揭示更佳翻译时自动回溯修正 |
 | 术语一致性保证 | 自动检测并统一专业术语翻译 |
 | 置信度可视化 | 每句翻译显示质量评分 |
-| 情感保留TTS | 情绪→音调/语速/音量映射，8种情感真实还原 |
 | 跨标签页浮窗 | Document PiP API，翻译字幕始终置顶可视 |
 | AI 会议摘要 | 收藏字幕→一键生成结构化会议纪要 |
 | Electron 桌面浮窗 | 无边框透明置顶，覆盖所有应用上方 |
@@ -168,7 +167,6 @@ UI 展示：旧译文红色删除线 → 新译文绿色滑入 + 修正原因标
 - **后端**: Node.js + Express + ws (WebSocket)
 - **AI 翻译/情感/摘要**: DeepSeek Chat API (OpenAI兼容 + JSON结构化输出)
 - **语音识别**: Web Speech API (浏览器原生) / SenseVoice (SiliconFlow, 系统音频模式)
-- **语音合成**: Browser SpeechSynthesis (情感调制TTS)
 - **悬浮窗**: Document Picture-in-Picture API / Electron BrowserWindow
 - **桌面客户端**: Electron 42 (透明无边框alwaysOnTop浮窗)
 - **样式**: CSS Custom Properties + clamp()自适应 + 玻璃态毛玻璃效果
@@ -208,11 +206,10 @@ UI 展示：旧译文红色删除线 → 新译文绿色滑入 + 修正原因标
 │   │   ├── useWebSocket.ts              # WebSocket 连接 + 自动重连
 │   │   ├── useSpeechRecognition.ts      # 麦克风语音识别 + 音频电平
 │   │   ├── useSystemAudioCapture.ts     # 系统音频捕获 (getDisplayMedia)
-│   │   ├── useTTS.ts                    # 情感保留TTS朗读 (SpeechSynthesis)
 │   │   └── usePiPWindow.ts             # Document PiP 跨标签页浮窗
 │   └── components/
 │       ├── SubtitleOverlay.tsx          # 双语分屏字幕 + 修正动画
-│       ├── TranslationHistory.tsx       # 翻译历史 (情感标签 + 🔊TTS按钮)
+│       ├── TranslationHistory.tsx       # 翻译历史
 │       └── FloatingSubtitles.tsx        # 固定悬浮字幕窗 (非PiP回退)
 ├── electron/
 │   ├── main.cjs           # Electron 主进程 (双窗口 + IPC)
