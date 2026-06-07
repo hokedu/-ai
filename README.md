@@ -66,13 +66,39 @@ npm run server
 
 ### 系统音频模式（支持腾讯会议等）
 
-配置 STT 服务后，可捕获本机系统音频实时翻译：
+配置 STT 服务后，可捕获本机系统音频实时翻译（腾讯会议 / Zoom / 浏览器标签页等）。
+
+**STT 服务选择（国内用户推荐方案 A 或 B）：**
+
+| 方案 | 服务商 | 配置说明 | 国内访问 |
+|------|--------|----------|----------|
+| A | **302.AI** | 注册即送额度，API 兼容 OpenAI 格式 | 可 |
+| B | **SiliconFlow** | 免费额度，Whisper API 兼容 | 可 |
+| C | Groq | 免费额度大，OpenAI 兼容 | 需代理 |
+
+**方案 A — 302.AI（国内推荐）：**
+
+1. 访问 [302.ai](https://302.ai) 注册
+2. 获取 API Key
+3. `.env` 配置：
 
 ```bash
-# .env 中添加 STT 配置（推荐 Groq 免费 Whisper API）
-STT_API_KEY=gsk_xxxx
-STT_BASE_URL=https://api.groq.com/openai
-STT_MODEL=whisper-large-v3
+STT_API_KEY=sk-你的302密钥
+STT_BASE_URL=https://api.302.ai
+STT_MODEL=whisper-1
+STT_LANGUAGE=en
+```
+
+**方案 B — SiliconFlow（国内推荐）：**
+
+1. 访问 [siliconflow.cn](https://siliconflow.cn) 注册
+2. 获取 API Key
+3. `.env` 配置：
+
+```bash
+STT_API_KEY=sk-你的硅基密钥
+STT_BASE_URL=https://api.siliconflow.cn
+STT_MODEL=FunAudioLLM/SenseVoiceSmall
 STT_LANGUAGE=en
 ```
 
@@ -92,10 +118,11 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 PORT=3000
 
-# 系统音频模式 STT 配置 (可选，推荐 Groq 免费额度)
+# 系统音频模式 STT 配置 (可选)
+# 国内推荐 302.AI 或 SiliconFlow，海外用 Groq
 STT_API_KEY=your-stt-api-key
-STT_BASE_URL=https://api.groq.com/openai
-STT_MODEL=whisper-large-v3
+STT_BASE_URL=https://api.302.ai
+STT_MODEL=whisper-1
 STT_LANGUAGE=en
 ```
 
