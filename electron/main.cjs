@@ -10,6 +10,7 @@
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const { readFileSync, writeFileSync } = require('fs');
 
 let mainWindow = null;
 let pipWindow = null;
@@ -90,7 +91,7 @@ function createPipWindow() {
   let pipW = 380;
   let pipH = 460;
   try {
-    const saved = JSON.parse(require('fs').readFileSync(
+    const saved = JSON.parse(readFileSync(
       path.join(app.getPath('userData'), 'pip-size.json'), 'utf-8'
     ));
     if (saved && saved.w && saved.h) { pipW = saved.w; pipH = saved.h; }
@@ -121,7 +122,7 @@ function createPipWindow() {
     if (pipWindow && !pipWindow.isDestroyed()) {
       const [w, h] = pipWindow.getSize();
       try {
-        require('fs').writeFileSync(
+        writeFileSync(
           path.join(app.getPath('userData'), 'pip-size.json'),
           JSON.stringify({ w, h })
         );

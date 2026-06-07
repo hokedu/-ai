@@ -3,7 +3,7 @@
  * Exposes a minimal Electron API to the React renderer via contextBridge.
  */
 
-const { contextBridge, ipcRenderer } = require('electron');
+import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   /** Open the floating subtitle window. */
