@@ -26,7 +26,7 @@
 
 | 功能演示 | 链接 |
 |---------|------|
-| 核心翻译 + 自动纠错 | [演示视频 v1](https://www.bilibili.com/video/BV1QSEt67Eb1/) |
+
 | 悬浮窗 + AI 摘要 + 情感TTS | [演示视频 v2](https://www.bilibili.com/video/BV1JEEh6TEMp/) |
 
 ## 核心功能
