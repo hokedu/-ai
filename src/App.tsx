@@ -44,6 +44,10 @@ function App() {
         });
         break;
       }
+      case 'reset_ack': {
+        // Server confirms session cleared — no additional action needed
+        break;
+      }
       case 'correction': {
         const correction: CorrectionEvent = {
           id: lastMessage.id || '',
@@ -92,6 +96,15 @@ function App() {
     );
   }, [startRecognition]);
 
+  // Reset session: clear server context + local state, stop listening if active
+  const handleReset = useCallback(() => {
+    if (isListening) stopRecognition();
+    sendMessageRef.current({ type: 'reset' });
+    setSubtitleEntries([]);
+    setCorrections([]);
+    setTotalCorrections(0);
+  }, [isListening, stopRecognition]);
+
   const stats = useMemo(() => ({
     totalCorrections,
     totalTranslations: subtitleEntries.filter((e) => e.mode === 'final').length
@@ -128,6 +141,14 @@ function App() {
               disabled={!isSupported}
             >
               {isListening ? '⏹ 停止翻译' : '🎤 开始翻译'}
+            </button>
+            <button
+              onClick={handleReset}
+              className="secondary"
+              disabled={isListening}
+              title={isListening ? '请先停止翻译' : '清空当前会话，开始新翻译'}
+            >
+              📄 新建翻译
             </button>
           </div>
           <div className="lang-selector">

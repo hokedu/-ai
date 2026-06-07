@@ -42,6 +42,9 @@ button.primary:active { transform: scale(0.98); }
 button.primary.danger { background: var(--danger); }
 button.primary.danger:hover { background: #dc2626; }
 button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+button.secondary { border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; font-weight: 500; font-size: 0.92rem; cursor: pointer; background: transparent; color: #cbd5e1; transition: background 0.2s, border-color 0.2s; white-space: nowrap; }
+button.secondary:hover { background: rgba(148, 163, 184, 0.08); border-color: rgba(148, 163, 184, 0.3); }
+button.secondary:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* Lang selector */
 .lang-selector label { display: flex; align-items: center; gap: 8px; color: #94a3b8; font-size: 0.88rem; }

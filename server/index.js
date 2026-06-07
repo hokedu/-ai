@@ -111,6 +111,15 @@ wss.on('connection', (ws) => {
           break;
         }
 
+        case 'reset': {
+          session.history = [];
+          session.contextWindow = [];
+          session.interimCache = null;
+          session.sourceLanguage = null;
+          ws.send(JSON.stringify({ type: 'reset_ack', timestamp: Date.now() }));
+          break;
+        }
+
         case 'ping': {
           ws.send(JSON.stringify({ type: 'pong' }));
           break;
