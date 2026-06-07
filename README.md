@@ -71,29 +71,11 @@ npm run server
 **STT 服务选择（国内用户推荐方案 A 或 B）：**
 
 | 方案 | 服务商 | 配置说明 | 国内访问 |
-|------|--------|----------|----------|
-| A | **302.AI** | 注册即送额度，API 兼容 OpenAI 格式 | 可 |
-| B | **SiliconFlow** | 免费额度，Whisper API 兼容 | 可 |
-| C | Groq | 免费额度大，OpenAI 兼容 | 需代理 |
+|
+**方案SiliconFlow**
 
-**方案 A — 302.AI（国内推荐）：**
 
-1. 访问 [302.ai](https://302.ai) 注册
-2. 获取 API Key
-3. `.env` 配置：
-
-```bash
-STT_API_KEY=sk-你的302密钥
-STT_BASE_URL=https://api.302.ai
-STT_MODEL=whisper-1
-STT_LANGUAGE=en
-```
-
-**方案 B — SiliconFlow（国内推荐）：**
-
-1. 访问 [siliconflow.cn](https://siliconflow.cn) 注册
-2. 获取 API Key
-3. `.env` 配置：
+`.env` 配置：
 
 ```bash
 STT_API_KEY=sk-你的硅基密钥
@@ -106,7 +88,7 @@ STT_LANGUAGE=en
 
 ## Demo 视频
 
-> [演示视频](https://www.bilibili.com/video/BV1SvEb62ET1/)
+> [演示视频](https://www.bilibili.com/video/BV1QSEt67Eb1/)
 
 ## 环境变量
 
