@@ -52,7 +52,9 @@ function App() {
   } = useSystemAudioCapture();
 
   const sendMessageRef = useRef(sendMessage);
-  sendMessageRef.current = sendMessage;
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  }, [sendMessage]);
 
   const activeAudioLevel = audioSource === 'system' ? sysAudioLevel : audioLevel;
   const isActive = audioSource === 'system' ? isCapturing : isListening;
@@ -253,7 +255,7 @@ function App() {
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            disabled={isListening}
+            disabled={isListening || isCapturing}
           >
             <option value="en-US">English</option>
             <option value="ja-JP">日本語</option>
@@ -335,7 +337,7 @@ function App() {
                       type="button"
                       className="folder-item"
                       onClick={() => selectFolder(folder.id)}
-                      disabled={isListening}
+                      disabled={isListening || isCapturing}
                     >
                       <span>{folder.name}</span>
                       <span className="folder-meta">{folder.entries.filter((e) => e.mode === 'final').length} 条</span>

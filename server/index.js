@@ -71,7 +71,62 @@ function pcm16ToWav(pcmBuffer, sampleRate = 16000) {
 }
 
 /**
- * Process accumulated audio buffer: STT → Translation → send to client.
+ * Shared pipeline: context-window translation + confidence + history + correction.
+ * Eliminates duplication between mic-STT (final) and system-audio-STT paths.
+ *
+ * @param {WebSocket} ws
+ * @param {object} session
+ * @param {string} text - source text to translate
+ * @param {string} id - unique entry identifier
+ * @param {string} sourceLang - BCP-47 language tag (e.g. 'en-US')
+ */
+async function translateAndBroadcast(ws, session, text, id, sourceLang) {
+  session.contextWindow.push(text);
+  if (session.contextWindow.length > 8) {
+    session.contextWindow.shift();
+  }
+
+  const translation = await translateEngine.translateWithContext(
+    text,
+    session.contextWindow.slice(0, -1),
+    sourceLang
+  );
+
+  const confidence = translateEngine.estimateConfidence(text, translation);
+
+  const entry = { id, source: text, translation, timestamp: Date.now(), confidence };
+  session.history.push(entry);
+
+  ws.send(JSON.stringify({
+    type: 'translation',
+    mode: 'final',
+    id, source: text, translation, confidence,
+    timestamp: entry.timestamp
+  }));
+
+  if (session.history.length >= 2) {
+    const corrections = await correctionEngine.checkAndCorrect(
+      session.history,
+      session.contextWindow,
+      translateEngine,
+      sourceLang
+    );
+
+    for (const c of corrections) {
+      ws.send(JSON.stringify({
+        type: 'correction',
+        id: c.id,
+        oldTranslation: c.oldTranslation,
+        newTranslation: c.newTranslation,
+        reason: c.reason,
+        timestamp: Date.now()
+      }));
+    }
+  }
+}
+
+/**
+ * Process accumulated system-audio buffer: PCM→WAV→STT→translate→broadcast.
  */
 async function processAudioBuffer(ws, session) {
   if (!sttEngine.isEnabled() || session.audioBuffer.length === 0) {
@@ -83,61 +138,16 @@ async function processAudioBuffer(ws, session) {
   session.audioBuffer = Buffer.alloc(0);
 
   try {
-    // Convert PCM to WAV
     const wavBuffer = pcm16ToWav(pcmBuffer);
     const lang = session.audioLanguage || 'en';
 
-    // STT: audio → text
     const text = await sttEngine.transcribe(wavBuffer, lang);
     if (!text || text.trim().length === 0) return;
 
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const sourceLang = session.sourceLanguage || 'en-US';
 
-    // Add to context window and translate
-    session.contextWindow.push(text);
-    if (session.contextWindow.length > 8) {
-      session.contextWindow.shift();
-    }
-
-    const translation = await translateEngine.translateWithContext(
-      text,
-      session.contextWindow.slice(0, -1),
-      sourceLang
-    );
-
-    const confidence = translateEngine.estimateConfidence(text, translation);
-
-    const entry = { id, source: text, translation, timestamp: Date.now(), confidence };
-    session.history.push(entry);
-
-    ws.send(JSON.stringify({
-      type: 'translation',
-      mode: 'final',
-      id, source: text, translation, confidence,
-      timestamp: entry.timestamp
-    }));
-
-    // Run correction if enough history
-    if (session.history.length >= 2) {
-      const corrections = await correctionEngine.checkAndCorrect(
-        session.history,
-        session.contextWindow,
-        translateEngine,
-        sourceLang
-      );
-
-      for (const c of corrections) {
-        ws.send(JSON.stringify({
-          type: 'correction',
-          id: c.id,
-          oldTranslation: c.oldTranslation,
-          newTranslation: c.newTranslation,
-          reason: c.reason,
-          timestamp: Date.now()
-        }));
-      }
-    }
+    await translateAndBroadcast(ws, session, text, id, sourceLang);
   } catch (err) {
     console.error('Audio processing error:', err.message);
     ws.send(JSON.stringify({
@@ -180,54 +190,13 @@ wss.on('connection', (ws) => {
         }
 
         case 'final': {
+          if (!msg.text) break;
           const source = msg.text;
           const id = msg.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           const sourceLang = msg.sourceLanguage || session.sourceLanguage || 'en-US';
           session.sourceLanguage = sourceLang;
 
-          session.contextWindow.push(source);
-          if (session.contextWindow.length > 8) {
-            session.contextWindow.shift();
-          }
-
-          const translation = await translateEngine.translateWithContext(
-            source,
-            session.contextWindow.slice(0, -1),
-            sourceLang
-          );
-
-          const confidence = translateEngine.estimateConfidence(source, translation);
-
-          const entry = { id, source, translation, timestamp: Date.now(), confidence };
-          session.history.push(entry);
-
-          ws.send(JSON.stringify({
-            type: 'translation',
-            mode: 'final',
-            id, source, translation, confidence,
-            timestamp: entry.timestamp
-          }));
-
-          if (session.history.length >= 2) {
-            const corrections = await correctionEngine.checkAndCorrect(
-              session.history,
-              session.contextWindow,
-              translateEngine,
-              sourceLang
-            );
-
-            for (const c of corrections) {
-              ws.send(JSON.stringify({
-                type: 'correction',
-                id: c.id,
-                oldTranslation: c.oldTranslation,
-                newTranslation: c.newTranslation,
-                reason: c.reason,
-                timestamp: Date.now()
-              }));
-            }
-          }
-
+          await translateAndBroadcast(ws, session, source, id, sourceLang);
           session.interimCache = null;
           break;
         }
