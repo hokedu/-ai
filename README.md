@@ -3,12 +3,11 @@
 > 七牛云面试题 — AI驱动的实时语音识别+翻译+自动纠错系统
 
 基于 DeepSeek 大模型的上下文感知同声传译引擎，支持实时字幕、自动修正、术语一致性保证。
+## 紧急说明
 
-## 开发说明
+本议题于 6 月 5 日发布，本人于 6 月 6 日初次接触（本计划参加第四批，6 月 6 日临时决定参加第三批）。因截止时间紧迫（6 月 7 日），开发周期压缩至两天内完成。初次查阅规则时未注意到"全周期持续交付"要求，导致所有 commit 集中在最后两天，非有意"突击提交"，望面试官手下留情。
 
-本项目于 2026 年 6 月 6 日初次接触该议题方向，因截止时间紧迫（6 月 7 日），开发周期被压缩至两天内完成。初次查阅规则时未注意到"全周期持续交付"的详细要求，导致所有 commit 集中在最后两天提交，非有意"突击提交"。
-
-**开发过程是渐进式的**，commit 序列体现了完整的功能迭代路径：
+**开发过程是渐进式的**，17 个 commit 序列体现了完整功能迭代：
 
 ```
 初始化脚手架 → AI翻译后端 → 前端基础设施
@@ -16,10 +15,10 @@
 → 修复语音识别回调 → 多语言动态切换
 → 新建翻译会话 → UI界面重构
 → 麦克风音量可视化修复 → 系统音频传译
-→ 背景图玻璃态UI → 产品文档 → README完善
+→ 背景图玻璃态UI → 产品文档 → 代码健壮性增强
 ```
 
-每个 commit 聚焦单一功能模块，符合增量开发的实践。若规则允许，希望能以实际代码质量和功能完整度参与评审。
+每个 commit 聚焦单一功能模块，符合增量开发实践。希望以实际代码质量和功能完整度参与评审。
 
 ## 核心功能
 
@@ -65,7 +64,7 @@ npm run server
 
 访问 `http://localhost:3000`，点击「开始翻译」并说话。
 
-### 系统音频模式（腾讯会议等）
+### 系统音频模式（支持腾讯会议等）
 
 配置 STT 服务后，可捕获本机系统音频实时翻译：
 
@@ -92,6 +91,12 @@ DEEPSEEK_API_KEY=你的API密钥
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 PORT=3000
+
+# 系统音频模式 STT 配置 (可选，推荐 Groq 免费额度)
+STT_API_KEY=your-stt-api-key
+STT_BASE_URL=https://api.groq.com/openai
+STT_MODEL=whisper-large-v3
+STT_LANGUAGE=en
 ```
 
 ## 自动纠错原理
@@ -145,19 +150,27 @@ UI 展示：旧译文红色删除线 → 新译文绿色滑入 + 修正原因标
 ├── server/
 │   ├── index.js          # WebSocket + Express 服务入口
 │   ├── translate.js      # DeepSeek 翻译引擎
-│   └── correction.js     # 自动纠错引擎
+│   ├── correction.js     # 自动纠错引擎
+│   └── stt.js            # STT 语音转文字适配器 (Whisper API)
 ├── src/
-│   ├── App.tsx           # 主应用组件
-│   ├── main.tsx          # 入口
-│   ├── styles.css        # 全局样式
+│   ├── App.tsx           # 主应用 (文件夹管理 + 音频源切换)
+│   ├── main.tsx          # React 入口
+│   ├── styles.css        # 全局样式 (玻璃态UI + 设计令牌)
+│   ├── types.d.ts        # Web Speech API 类型声明
 │   ├── hooks/
-│   │   ├── useWebSocket.ts
-│   │   └── useSpeechRecognition.ts
+│   │   ├── useWebSocket.ts              # WebSocket 连接 + 自动重连
+│   │   ├── useSpeechRecognition.ts      # 麦克风语音识别 + 音频电平
+│   │   └── useSystemAudioCapture.ts     # 系统音频捕获 (getDisplayMedia)
 │   └── components/
-│       ├── SubtitleOverlay.tsx
-│       └── TranslationHistory.tsx
-├── .env.example         # 环境变量模板
-└── package.json
+│       ├── SubtitleOverlay.tsx          # 双语分屏字幕
+│       └── TranslationHistory.tsx       # 可折叠翻译历史
+├── docs/
+│   └── PRODUCT.md        # 详细产品文档 (架构图/API/算法)
+├── public/
+│   └── bg.jpg            # 专业翻译场景背景图
+├── .env.example          # 环境变量模板
+├── package.json
+└── vite.config.ts
 ```
 
 ## License
