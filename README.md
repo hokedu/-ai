@@ -48,6 +48,24 @@ npm run server
 
 访问 `http://localhost:3000`，点击「开始翻译」并说话。
 
+### 系统音频模式（腾讯会议等）
+
+配置 STT 服务后，可捕获本机系统音频实时翻译：
+
+```bash
+# .env 中添加 STT 配置（推荐 Groq 免费 Whisper API）
+STT_API_KEY=gsk_xxxx
+STT_BASE_URL=https://api.groq.com/openai
+STT_MODEL=whisper-large-v3
+STT_LANGUAGE=en
+```
+
+启动后页面顶部切换到 🖥️ 模式，点击开始 → 选择腾讯会议窗口并勾选"分享音频"。
+
+## Demo 视频
+
+> [📹 演示视频链接](https://your-video-link) ← 请替换为实际视频地址
+
 ## 环境变量
 
 编辑 `.env` 文件:
@@ -83,8 +101,26 @@ UI 展示：旧译文红色删除线 → 新译文绿色滑入 + 修正原因标
 
 - **前端**: React 18 + TypeScript + Vite
 - **后端**: Node.js + Express + ws (WebSocket)
-- **AI**: DeepSeek Chat API (OpenAI兼容)
-- **语音识别**: Web Speech API (浏览器原生)
+- **AI 翻译**: DeepSeek Chat API (OpenAI兼容)
+- **语音识别**: Web Speech API (浏览器原生) / Whisper API (系统音频模式)
+- **样式**: CSS Custom Properties + 玻璃态毛玻璃效果
+
+### 第三方依赖
+
+| 依赖 | 用途 | 许可 |
+|------|------|------|
+| react / react-dom | 前端UI框架 | MIT |
+| typescript | 类型安全 | Apache-2.0 |
+| vite + @vitejs/plugin-react | 构建工具 | MIT |
+| express | HTTP服务 + 静态托管 | MIT |
+| ws | WebSocket实时通信 | MIT |
+| cors | 跨域支持 | MIT |
+| dotenv | 环境变量管理 | BSD-2 |
+| openai | DeepSeek API调用 (兼容) | Apache-2.0 |
+
+### 详细文档
+
+参见 [docs/PRODUCT.md](docs/PRODUCT.md) — 包含完整架构图、数据流、API协议、算法详解。
 
 ## 项目结构
 
