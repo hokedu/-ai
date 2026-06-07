@@ -30,6 +30,7 @@ interface FavoriteCollection {
   name: string;
   entries: SubtitleEntry[];
   createdAt: number;
+  summary?: string;
 }
 
 function App() {
@@ -52,6 +53,7 @@ function App() {
 
   // ── Favorites ──
   const [favorites, setFavorites] = useState<FavoriteCollection[]>([]);
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
 
   // ── Environment detection ──
   const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
@@ -381,6 +383,35 @@ function App() {
     setFavorites((prev) => prev.filter((f) => f.id !== id));
   }, []);
 
+  const handleSummarize = useCallback(async (favId: string) => {
+    const fav = favorites.find((f) => f.id === favId);
+    if (!fav || fav.entries.length === 0) return;
+
+    setSummarizingId(favId);
+    try {
+      const res = await fetch(`/api/summarize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entries: fav.entries.map((e) => ({
+            source: e.source,
+            translation: e.translation,
+            timestamp: e.timestamp,
+          })),
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setFavorites((prev) =>
+        prev.map((f) => (f.id === favId ? { ...f, summary: data.summary } : f))
+      );
+    } catch (err) {
+      console.error('Summarize failed:', err);
+    } finally {
+      setSummarizingId(null);
+    }
+  }, [favorites]);
+
   const targetLabel = TARGET_LABELS[language] || '中文';
 
   return (
@@ -568,6 +599,13 @@ function App() {
                       {fav.entries.length} 条 · {new Date(fav.createdAt).toLocaleString('zh-CN')}
                     </span>
                     <button
+                      className="btn btn-ghost fav-summarize-btn"
+                      onClick={() => handleSummarize(fav.id)}
+                      disabled={summarizingId === fav.id}
+                    >
+                      {summarizingId === fav.id ? '⏳ 生成中...' : fav.summary ? '🔄 重新生成' : '📋 AI摘要'}
+                    </button>
+                    <button
                       className="folder-delete"
                       onClick={() => deleteFavorite(fav.id)}
                       aria-label="删除收藏"
@@ -575,6 +613,12 @@ function App() {
                       ×
                     </button>
                   </div>
+                  {fav.summary && (
+                    <div className="fav-summary">
+                      <div className="fav-summary-header">📋 会议摘要</div>
+                      <p className="fav-summary-text">{fav.summary}</p>
+                    </div>
+                  )}
                   <div className="fav-collection-entries">
                     {fav.entries.map((entry) => (
                       <div key={entry.id} className="fav-entry">

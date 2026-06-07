@@ -106,7 +106,6 @@ function buildPiPHtml(): string {
     padding: 6px 10px;
     background: rgba(255, 255, 255, 0.04);
     border-radius: 6px;
-    border-left: 2px solid #3b82f6;
     animation: pip-in 280ms ease-out;
     display: flex;
     flex-direction: column;

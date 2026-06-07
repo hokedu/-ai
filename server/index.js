@@ -24,6 +24,67 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', model: process.env.DEEPSEEK_MODEL || 'deepseek-chat' });
 });
 
+/**
+ * POST /api/summarize
+ * Generate a concise meeting summary from a list of translated sentences.
+ * Body: { entries: Array<{ source: string; translation: string; timestamp: number }> }
+ * Returns: { summary: string }
+ */
+app.post('/api/summarize', async (req, res) => {
+  try {
+    const { entries } = req.body;
+    if (!entries || entries.length === 0) {
+      return res.status(400).json({ error: 'No entries provided' });
+    }
+
+    const lines = entries
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map((e) => `[${new Date(e.timestamp).toLocaleTimeString('zh-CN')}] ${e.translation}`)
+      .join('\n');
+
+    const prompt = `你是一个专业的会议记录助理。以下是一场对话/会议的实时翻译记录，请总结成简洁的会议摘要。
+
+要求：
+1. 提炼 3-6 个核心要点，每条不超过 40 字
+2. 开头用一句话概括本次对话的总体主题（不超过 50 字）
+3. 输出纯文本，不要 Markdown 标记，不要加粗或列表符号
+4. 用中文输出
+
+翻译记录：
+${lines}`;
+
+    const response = await fetch(`${translateEngine.baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${translateEngine.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: translateEngine.model,
+        messages: [
+          { role: 'system', content: '你是一个专业的会议记录摘要助手。输出简洁、结构化的中文摘要。' },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 600,
+        temperature: 0.3,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`DeepSeek API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const summary = data.choices[0].message.content.trim();
+
+    res.json({ summary });
+  } catch (err) {
+    console.error('Summary generation failed:', err.message);
+    res.status(500).json({ error: 'Summary generation failed' });
+  }
+});
+
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
