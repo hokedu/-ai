@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
+import { useSystemAudioCapture } from './hooks/useSystemAudioCapture';
 import { useWebSocket } from './hooks/useWebSocket';
 import SubtitleOverlay from './components/SubtitleOverlay';
 import TranslationHistory from './components/TranslationHistory';
@@ -24,6 +25,7 @@ interface TranslationFolder {
 
 function App() {
   const [language, setLanguage] = useState('en-US');
+  const [audioSource, setAudioSource] = useState<'mic' | 'system'>('mic');
   const [folders, setFolders] = useState<TranslationFolder[]>([{
     id: 'default',
     name: '默认会话',
@@ -43,18 +45,27 @@ function App() {
     start: startRecognition, stop: stopRecognition
   } = useSpeechRecognition(language);
 
+  const {
+    isCapturing, isSupported: sysAudioSupported, status: sysAudioStatus,
+    audioLevel: sysAudioLevel,
+    start: startSysCapture, stop: stopSysCapture
+  } = useSystemAudioCapture();
+
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
+
+  const activeAudioLevel = audioSource === 'system' ? sysAudioLevel : audioLevel;
+  const isActive = audioSource === 'system' ? isCapturing : isListening;
 
   const meterCells = useMemo(() => {
     return Array.from({ length: 8 }, (_, index) => {
       // Log-scale threshold: lower bars light up easily, higher bars need louder input
       const threshold = Math.pow(index / 7, 1.6) * 0.7 + 0.03;
-      const active = audioLevel >= threshold;
-      const intensity = active ? Math.min(1, (audioLevel - threshold) / (1 - threshold) + 0.2) : 0;
+      const active = activeAudioLevel >= threshold;
+      const intensity = active ? Math.min(1, (activeAudioLevel - threshold) / (1 - threshold) + 0.2) : 0;
       return { active, intensity };
     });
-  }, [audioLevel]);
+  }, [activeAudioLevel]);
 
   const selectedFolder = useMemo(
     () => folders.find((folder) => folder.id === selectedFolderId) ?? folders[0],
@@ -124,47 +135,60 @@ function App() {
   }, [folderMenuOpen]);
 
   const handleStart = useCallback(() => {
-    startRecognition(
-      (text: string) => {
-        const id = 'interim-current';
-        sendMessageRef.current({ type: 'interim', id, text, sourceLanguage: language });
-        setFolders((prevFolders) =>
-          prevFolders.map((folder) => {
-            if (folder.id !== selectedFolderId) return folder;
-            const entry: SubtitleEntry = {
-              id,
-              source: text,
-              translation: '识别中...',
-              mode: 'interim',
-              confidence: 50,
-              timestamp: Date.now()
-            };
-            const entries = [...folder.entries];
-            const idx = entries.findIndex((e) => e.id === id);
-            if (idx >= 0) {
-              entries[idx] = entry;
-            } else {
-              entries.push(entry);
-            }
-            return { ...folder, entries };
-          })
-        );
-      },
-      (text: string) => {
-        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        sendMessageRef.current({ type: 'final', id, text, sourceLanguage: language });
-        setFolders((prevFolders) =>
-          prevFolders.map((folder) => {
-            if (folder.id !== selectedFolderId) return folder;
-            return { ...folder, entries: folder.entries.filter((e) => e.id !== 'interim-current') };
-          })
-        );
-      }
-    );
-  }, [startRecognition, language, selectedFolderId]);
+    if (audioSource === 'system') {
+      // System audio mode: capture → send PCM chunks → server STT → translate
+      const langMap: Record<string, string> = {
+        'en-US': 'en', 'ja-JP': 'ja', 'ko-KR': 'ko', 'zh-CN': 'zh',
+      };
+      sendMessageRef.current({ type: 'audio-start', language: langMap[language] || 'en' });
+      startSysCapture((base64Pcm: string) => {
+        sendMessageRef.current({ type: 'audio-chunk', data: base64Pcm });
+      });
+    } else {
+      // Mic mode: browser STT → send text → server translate
+      startRecognition(
+        (text: string) => {
+          const id = 'interim-current';
+          sendMessageRef.current({ type: 'interim', id, text, sourceLanguage: language });
+          setFolders((prevFolders) =>
+            prevFolders.map((folder) => {
+              if (folder.id !== selectedFolderId) return folder;
+              const entry: SubtitleEntry = {
+                id,
+                source: text,
+                translation: '识别中...',
+                mode: 'interim',
+                confidence: 50,
+                timestamp: Date.now()
+              };
+              const entries = [...folder.entries];
+              const idx = entries.findIndex((e) => e.id === id);
+              if (idx >= 0) {
+                entries[idx] = entry;
+              } else {
+                entries.push(entry);
+              }
+              return { ...folder, entries };
+            })
+          );
+        },
+        (text: string) => {
+          const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+          sendMessageRef.current({ type: 'final', id, text, sourceLanguage: language });
+          setFolders((prevFolders) =>
+            prevFolders.map((folder) => {
+              if (folder.id !== selectedFolderId) return folder;
+              return { ...folder, entries: folder.entries.filter((e) => e.id !== 'interim-current') };
+            })
+          );
+        }
+      );
+    }
+  }, [audioSource, startRecognition, startSysCapture, language, selectedFolderId]);
 
   const handleReset = useCallback(() => {
     if (isListening) stopRecognition();
+    if (isCapturing) stopSysCapture();
     sendMessageRef.current({ type: 'reset' });
     setFolders((prevFolders) =>
       prevFolders.map((folder) =>
@@ -173,7 +197,7 @@ function App() {
           : folder
       )
     );
-  }, [isListening, stopRecognition, selectedFolderId]);
+  }, [isListening, isCapturing, stopRecognition, stopSysCapture, selectedFolderId]);
 
   const stats = useMemo(() => ({
     totalCorrections: selectedFolder.corrections.length,
@@ -209,10 +233,10 @@ function App() {
   }, [selectedFolderId]);
 
   const selectFolder = useCallback((id: string) => {
-    if (isListening) return;
+    if (isListening || isCapturing) return;
     setSelectedFolderId(id);
     setFolderMenuOpen(false);
-  }, [isListening]);
+  }, [isListening, isCapturing]);
 
   const targetLabel = TARGET_LABELS[language] || '中文';
 
@@ -239,20 +263,37 @@ function App() {
           <span className="lang-arrow">→</span>
           <span className="lang-target">{targetLabel}</span>
         </div>
-        {isListening && <span className="lang-locked-hint">停止后可切换</span>}
+        {(isListening || isCapturing) && <span className="lang-locked-hint">停止后可切换</span>}
+
+        <div className="audio-source-toggle">
+          <button
+            className={`source-btn ${audioSource === 'mic' ? 'active' : ''}`}
+            onClick={() => setAudioSource('mic')}
+            disabled={isListening || isCapturing}
+            title="麦克风输入"
+          >🎤</button>
+          <button
+            className={`source-btn ${audioSource === 'system' ? 'active' : ''}`}
+            onClick={() => setAudioSource('system')}
+            disabled={isListening || isCapturing}
+            title="系统音频（腾讯会议等）"
+          >🖥️</button>
+        </div>
 
         <div className="control-status">
+          {isConnected && (
+            <span className="status-chip">
+              <span className="dot online" />
+              AI 已连接
+            </span>
+          )}
           <span className="status-chip">
-            <span className={`dot ${isConnected ? 'online' : 'offline'}`} />
-            {isConnected ? 'AI 已连接' : '连接中'}
-          </span>
-          <span className="status-chip">
-            <span className={`dot ${isListening ? 'online' : 'idle'}`} />
-            {isListening ? status : (isSupported ? '待机' : '需 Chrome')}
+            <span className={`dot ${(isListening || isCapturing) ? 'online' : 'idle'}`} />
+            {isListening ? status : isCapturing ? sysAudioStatus : (isSupported || sysAudioSupported ? '待机' : '需 Chrome')}
           </span>
         </div>
 
-        <div className={`mic-grid ${isListening ? 'active' : ''}`} aria-hidden="true">
+        <div className={`mic-grid ${isActive ? 'active' : ''}`} aria-hidden="true">
           {meterCells.map((cell, index) => (
             <div
               key={index}
@@ -269,18 +310,18 @@ function App() {
 
         <div className="control-actions">
           <button
-            onClick={isListening ? stopRecognition : handleStart}
-            className={`btn ${isListening ? 'btn-danger' : 'btn-primary'}`}
-            disabled={!isSupported}
+            onClick={isListening ? stopRecognition : isCapturing ? stopSysCapture : handleStart}
+            className={`btn ${(isListening || isCapturing) ? 'btn-danger' : 'btn-primary'}`}
+            disabled={audioSource === 'system' ? !sysAudioSupported : !isSupported}
           >
-            {isListening ? '⏹ 停止' : '🎤 开始翻译'}
+            {isListening ? '⏹ 停止' : isCapturing ? '⏹ 停止捕获' : audioSource === 'system' ? '🖥️ 开始系统音频翻译' : '🎤 开始翻译'}
           </button>
 
           <div ref={folderMenuRef} className="folder-menu">
             <button
               onClick={() => setFolderMenuOpen((open) => !open)}
               className="btn btn-ghost folder-toggle"
-              disabled={isListening}
+              disabled={isListening || isCapturing}
             >
               📁 {selectedFolder.name}
               <span className={`chevron ${folderMenuOpen ? 'open' : ''}`}>▼</span>
