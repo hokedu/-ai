@@ -17,7 +17,7 @@
 → 麦克风音量可视化修复 → 系统音频传译
 → 背景图玻璃态UI → 产品文档 → 代码健壮性增强
 → 情感分析 → 跨标签页悬浮窗(PiP)
-→ Electron桌面客户端 → AI会议摘要 → 导航栏自适应
+→ AI会议摘要 → 导航栏自适应
 ```
 
 每个 commit 聚焦单一功能模块，符合增量开发实践。希望以实际代码质量和功能完整度参与评审。
@@ -100,25 +100,6 @@ STT_LANGUAGE=en
 
 启动后页面顶部切换到系统音频模式，点击开始 → 选择腾讯会议窗口并勾选"分享音频"。
 
-### Electron 桌面客户端
-
-```bash
-# 安装 Electron（国内镜像加速）
-export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-npm install electron electron-builder --save-dev
-
-# 启动桌面客户端
-npm run electron:dev
-
-# 打包为安装程序
-npm run electron:build
-```
-
-桌面客户端特色：
-- **无边框透明浮窗** — PiP 窗口纯净玻璃态，无 OS 标题栏
-- **alwaysOnTop 置顶** — 覆盖腾讯会议 / Zoom 等全屏应用
-- **跨标签页独立窗口** — Electron BrowserWindow，完全不受浏览器限制
-- **可拖拽 + 可缩放** — 原生窗口操作，位置/大小自动记忆
 
 ## 环境变量
 
@@ -159,7 +140,6 @@ UI 展示：旧译文红色删除线 → 新译文绿色滑入 + 修正原因标
 | 置信度可视化 | 每句翻译显示质量评分 |
 | 跨标签页浮窗 | Document PiP API，翻译字幕始终置顶可视 |
 | AI 会议摘要 | 收藏字幕→一键生成结构化会议纪要 |
-| Electron 桌面浮窗 | 无边框透明置顶，覆盖所有应用上方 |
 
 ## 技术栈
 
@@ -167,8 +147,7 @@ UI 展示：旧译文红色删除线 → 新译文绿色滑入 + 修正原因标
 - **后端**: Node.js + Express + ws (WebSocket)
 - **AI 翻译/情感/摘要**: DeepSeek Chat API (OpenAI兼容 + JSON结构化输出)
 - **语音识别**: Web Speech API (浏览器原生) / SenseVoice (SiliconFlow, 系统音频模式)
-- **悬浮窗**: Document Picture-in-Picture API / Electron BrowserWindow
-- **桌面客户端**: Electron 42 (透明无边框alwaysOnTop浮窗)
+- **悬浮窗**: Document Picture-in-Picture API
 - **样式**: CSS Custom Properties + clamp()自适应 + 玻璃态毛玻璃效果
 
 ### 第三方依赖
@@ -183,7 +162,6 @@ UI 展示：旧译文红色删除线 → 新译文绿色滑入 + 修正原因标
 | cors | 跨域支持 | MIT |
 | dotenv | 环境变量管理 | BSD-2 |
 | openai | DeepSeek API调用 (兼容) | Apache-2.0 |
-| electron | 桌面客户端框架 | MIT |
 
 ### 详细文档
 
@@ -201,7 +179,7 @@ UI 展示：旧译文红色删除线 → 新译文绿色滑入 + 修正原因标
 │   ├── App.tsx           # 主应用 (会话管理 + 双模式浮窗 + 收藏摘要)
 │   ├── main.tsx          # React 入口
 │   ├── styles.css        # 全局样式 (玻璃态UI + 自适应clamp()布局)
-│   ├── types.d.ts        # Web Speech API + PiP + Electron 类型声明
+│   ├── types.d.ts        # Web Speech API + PiP 类型声明
 │   ├── hooks/
 │   │   ├── useWebSocket.ts              # WebSocket 连接 + 自动重连
 │   │   ├── useSpeechRecognition.ts      # 麦克风语音识别 + 音频电平
@@ -211,10 +189,6 @@ UI 展示：旧译文红色删除线 → 新译文绿色滑入 + 修正原因标
 │       ├── SubtitleOverlay.tsx          # 双语分屏字幕 + 修正动画
 │       ├── TranslationHistory.tsx       # 翻译历史
 │       └── FloatingSubtitles.tsx        # 固定悬浮字幕窗 (非PiP回退)
-├── electron/
-│   ├── main.cjs           # Electron 主进程 (双窗口 + IPC)
-│   ├── preload.cjs        # contextBridge 安全桥接
-│   └── pip.html           # 独立浮窗页面 (玻璃态 + 拖拽缩放)
 ├── docs/
 │   └── PRODUCT.md        # 详细产品文档 (架构图/API/算法)
 ├── public/
