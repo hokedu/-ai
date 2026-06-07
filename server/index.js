@@ -174,6 +174,7 @@ wss.on('connection', (ws) => {
 
       switch (msg.type) {
         case 'interim': {
+          if (!msg.text) break;
           const sourceLang = msg.sourceLanguage || 'en-US';
           session.sourceLanguage = sourceLang;
           session.interimCache = msg.text;

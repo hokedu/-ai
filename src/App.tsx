@@ -6,7 +6,8 @@ import SubtitleOverlay from './components/SubtitleOverlay';
 import TranslationHistory from './components/TranslationHistory';
 import type { SubtitleEntry, CorrectionEvent } from './components/SubtitleOverlay';
 
-const WS_URL = `ws://${window.location.hostname}:3000`;
+const WS_PORT = window.location.port || '3000';
+const WS_URL = `ws://${window.location.hostname}:${WS_PORT}`;
 
 const TARGET_LABELS: Record<string, string> = {
   'en-US': '中文',
