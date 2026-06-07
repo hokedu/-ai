@@ -7,11 +7,19 @@ import type { SubtitleEntry, CorrectionEvent } from './components/SubtitleOverla
 
 const WS_URL = `ws://${window.location.hostname}:3000`;
 
+const TARGET_LABELS: Record<string, string> = {
+  'en-US': '中文',
+  'ja-JP': '中文',
+  'ko-KR': '中文',
+  'zh-CN': 'English',
+};
+
 function App() {
   const [language, setLanguage] = useState('en-US');
   const [subtitleEntries, setSubtitleEntries] = useState<SubtitleEntry[]>([]);
   const [corrections, setCorrections] = useState<CorrectionEvent[]>([]);
   const [totalCorrections, setTotalCorrections] = useState(0);
+  const [historyOpen, setHistoryOpen] = useState(true);
 
   const { isConnected, lastMessage, sendMessage } = useWebSocket(WS_URL);
   const {
@@ -19,11 +27,9 @@ function App() {
     start: startRecognition, stop: stopRecognition
   } = useSpeechRecognition(language);
 
-  // Stable ref so callbacks passed to startRecognition always have latest sendMessage
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
 
-  // Process WebSocket messages from AI backend
   useEffect(() => {
     if (!lastMessage) return;
 
@@ -45,7 +51,6 @@ function App() {
         break;
       }
       case 'reset_ack': {
-        // Server confirms session cleared — no additional action needed
         break;
       }
       case 'correction': {
@@ -70,10 +75,8 @@ function App() {
     }
   }, [lastMessage]);
 
-  // Start recognition — callbacks wired directly, no ref timing issues
   const handleStart = useCallback(() => {
     startRecognition(
-      // onInterim
       (text: string) => {
         const id = 'interim-current';
         sendMessageRef.current({ type: 'interim', id, text, sourceLanguage: language });
@@ -87,16 +90,14 @@ function App() {
           return [...prev, entry];
         });
       },
-      // onFinal
       (text: string) => {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         sendMessageRef.current({ type: 'final', id, text, sourceLanguage: language });
         setSubtitleEntries((prev) => prev.filter((e) => e.id !== 'interim-current'));
       }
     );
-  }, [startRecognition]);
+  }, [startRecognition, language]);
 
-  // Reset session: clear server context + local state, stop listening if active
   const handleReset = useCallback(() => {
     if (isListening) stopRecognition();
     sendMessageRef.current({ type: 'reset' });
@@ -110,64 +111,59 @@ function App() {
     totalTranslations: subtitleEntries.filter((e) => e.mode === 'final').length
   }), [totalCorrections, subtitleEntries]);
 
+  const targetLabel = TARGET_LABELS[language] || '中文';
+
   return (
     <main className="app-shell">
-      <header className="app-header">
-        <div className="header-left">
-          <p className="eyebrow">AI 同声传译助手</p>
-          <h1>实时语音识别 + AI翻译 + 自动修正</h1>
-          <p className="description">
-            基于 DeepSeek 大模型的上下文感知翻译引擎，支持实时纠错与术语一致性保证
-          </p>
+      {/* ── Compact Control Bar ── */}
+      <header className="control-bar">
+        <div className="control-brand">
+          <span className="brand-dot" />
+          AI 同声传译
         </div>
-        <div className="header-right">
-          <div className="status-card">
-            <div className="status-row">
-              <span className={`dot ${isConnected ? 'green' : 'red'}`} />
-              <span>{isConnected ? 'AI 引擎已连接' : 'AI 引擎连接中...'}</span>
-            </div>
-            <div className="status-row">
-              <span className={`dot ${isListening ? 'green' : 'gray'}`} />
-              <span>{isListening ? status : '待机'}</span>
-            </div>
-            <div className="status-row">
-              <span>语音识别：{isSupported ? '✓ Chrome' : '✗ 请使用 Chrome'}</span>
-            </div>
-          </div>
-          <div className="header-actions">
-            <button
-              onClick={isListening ? stopRecognition : handleStart}
-              className={`primary ${isListening ? 'danger' : ''}`}
-              disabled={!isSupported}
-            >
-              {isListening ? '⏹ 停止翻译' : '🎤 开始翻译'}
-            </button>
-            <button
-              onClick={handleReset}
-              className="secondary"
-              disabled={isListening}
-              title={isListening ? '请先停止翻译' : '清空当前会话，开始新翻译'}
-            >
-              📄 新建翻译
-            </button>
-          </div>
-          <div className="lang-selector">
-            <label>
-              源语言：
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                disabled={isListening}
-                title={isListening ? '请先停止翻译再切换语言' : '选择源语言'}
-              >
-                <option value="en-US">English</option>
-                <option value="ja-JP">日本語</option>
-                <option value="ko-KR">한국어</option>
-                <option value="zh-CN">中文</option>
-              </select>
-            </label>
-            {isListening && <span className="lang-locked-hint">停止翻译后可切换</span>}
-          </div>
+
+        <div className="lang-pair">
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            disabled={isListening}
+          >
+            <option value="en-US">English</option>
+            <option value="ja-JP">日本語</option>
+            <option value="ko-KR">한국어</option>
+            <option value="zh-CN">中文</option>
+          </select>
+          <span className="lang-arrow">→</span>
+          <span className="lang-target">{targetLabel}</span>
+        </div>
+        {isListening && <span className="lang-locked-hint">停止后可切换</span>}
+
+        <div className="control-status">
+          <span className="status-chip">
+            <span className={`dot ${isConnected ? 'online' : 'offline'}`} />
+            {isConnected ? 'AI 已连接' : '连接中'}
+          </span>
+          <span className="status-chip">
+            <span className={`dot ${isListening ? 'online' : 'idle'}`} />
+            {isListening ? status : (isSupported ? '待机' : '需 Chrome')}
+          </span>
+        </div>
+
+        <div className="control-actions">
+          <button
+            onClick={isListening ? stopRecognition : handleStart}
+            className={`btn ${isListening ? 'btn-danger' : 'btn-primary'}`}
+            disabled={!isSupported}
+          >
+            {isListening ? '⏹ 停止' : '🎤 开始翻译'}
+          </button>
+          <button
+            onClick={handleReset}
+            className="btn btn-ghost"
+            disabled={isListening}
+          >
+            📄 新建
+          </button>
         </div>
       </header>
 
@@ -181,6 +177,8 @@ function App() {
         entries={subtitleEntries}
         corrections={corrections}
         stats={stats}
+        isOpen={historyOpen}
+        onToggle={() => setHistoryOpen((v) => !v)}
       />
     </main>
   );
