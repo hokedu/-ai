@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 import { useWebSocket } from './hooks/useWebSocket';
 import SubtitleOverlay from './components/SubtitleOverlay';
@@ -16,9 +16,12 @@ function App() {
   const { isConnected, lastMessage, sendMessage } = useWebSocket(WS_URL);
   const {
     isListening, isSupported, status,
-    start: startRecognition, stop: stopRecognition,
-    setOnInterim, setOnFinal
+    start: startRecognition, stop: stopRecognition
   } = useSpeechRecognition(language);
+
+  // Stable ref so callbacks passed to startRecognition always have latest sendMessage
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
 
   // Process WebSocket messages from AI backend
   useEffect(() => {
@@ -63,31 +66,31 @@ function App() {
     }
   }, [lastMessage]);
 
-  // Speech recognition → WebSocket
-  const handleInterim = useCallback((text: string) => {
-    const id = 'interim-current';
-    sendMessage({ type: 'interim', id, text });
-    const entry: SubtitleEntry = {
-      id, source: text, translation: '识别中...',
-      mode: 'interim', confidence: 50, timestamp: Date.now()
-    };
-    setSubtitleEntries((prev) => {
-      const idx = prev.findIndex((e) => e.id === id);
-      if (idx >= 0) { const u = [...prev]; u[idx] = entry; return u; }
-      return [...prev, entry];
-    });
-  }, [sendMessage]);
-
-  const handleFinal = useCallback((text: string) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    sendMessage({ type: 'final', id, text });
-    setSubtitleEntries((prev) => prev.filter((e) => e.id !== 'interim-current'));
-  }, [sendMessage]);
-
-  useEffect(() => {
-    setOnInterim(() => handleInterim);
-    setOnFinal(() => handleFinal);
-  }, [handleInterim, handleFinal, setOnInterim, setOnFinal]);
+  // Start recognition — callbacks wired directly, no ref timing issues
+  const handleStart = useCallback(() => {
+    startRecognition(
+      // onInterim
+      (text: string) => {
+        const id = 'interim-current';
+        sendMessageRef.current({ type: 'interim', id, text });
+        setSubtitleEntries((prev) => {
+          const entry: SubtitleEntry = {
+            id, source: text, translation: '识别中...',
+            mode: 'interim', confidence: 50, timestamp: Date.now()
+          };
+          const idx = prev.findIndex((e) => e.id === id);
+          if (idx >= 0) { const u = [...prev]; u[idx] = entry; return u; }
+          return [...prev, entry];
+        });
+      },
+      // onFinal
+      (text: string) => {
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        sendMessageRef.current({ type: 'final', id, text });
+        setSubtitleEntries((prev) => prev.filter((e) => e.id !== 'interim-current'));
+      }
+    );
+  }, [startRecognition]);
 
   const stats = useMemo(() => ({
     totalCorrections,
@@ -120,7 +123,7 @@ function App() {
           </div>
           <div className="header-actions">
             <button
-              onClick={isListening ? stopRecognition : startRecognition}
+              onClick={isListening ? stopRecognition : handleStart}
               className={`primary ${isListening ? 'danger' : ''}`}
               disabled={!isSupported}
             >

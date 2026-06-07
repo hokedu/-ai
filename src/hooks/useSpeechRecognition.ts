@@ -1,19 +1,15 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 
 interface UseSpeechRecognitionReturn {
   isListening: boolean;
   isSupported: boolean;
   status: string;
-  start: () => Promise<void>;
+  start: (onInterim: (text: string) => void, onFinal: (text: string) => void) => Promise<void>;
   stop: () => void;
-  setOnInterim: (fn: ((text: string) => void) | null) => void;
-  setOnFinal: (fn: ((text: string) => void) | null) => void;
 }
 
 export function useSpeechRecognition(language = 'en-US'): UseSpeechRecognitionReturn {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const onInterimRef = useRef<((text: string) => void) | null>(null);
-  const onFinalRef = useRef<((text: string) => void) | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [status, setStatus] = useState('待机');
@@ -23,51 +19,88 @@ export function useSpeechRecognition(language = 'en-US'): UseSpeechRecognitionRe
     setIsSupported(!!SR);
   }, []);
 
-  const start = useCallback(async () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { setStatus('浏览器不支持语音识别'); return; }
-
-    try { await navigator.mediaDevices.getUserMedia({ audio: true }); } catch {
-      setStatus('麦克风权限被拒绝'); return;
-    }
-
-    const recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = language;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => { setStatus('正在监听...'); setIsListening(true); };
-    recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
-      setStatus(e.error === 'not-allowed' ? '麦克风权限被拒绝' : `错误: ${e.error}`);
-    };
-    recognition.onend = () => { setIsListening(false); setStatus('已停止'); };
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interimText = '';
-      let finalText = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const r = event.results[i];
-        if (r.isFinal) finalText += r[0].transcript;
-        else interimText += r[0].transcript;
+  const start = useCallback(
+    async (onInterim: (text: string) => void, onFinal: (text: string) => void) => {
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SR) {
+        setStatus('浏览器不支持语音识别，请使用 Chrome');
+        return;
       }
 
-      if (interimText && onInterimRef.current) onInterimRef.current(interimText);
-      if (finalText && onFinalRef.current) onFinalRef.current(finalText);
-    };
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch { /* ok */ }
+      }
 
-    recognition.start();
-    recognitionRef.current = recognition;
-  }, [language]);
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        setStatus('麦克风权限被拒绝，请在浏览器设置中允许');
+        return;
+      }
+
+      const recognition = new SR();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = language;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setStatus('正在监听...');
+        setIsListening(true);
+      };
+
+      recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
+        const msg = e.error === 'not-allowed'
+          ? '麦克风权限被拒绝'
+          : e.error === 'no-speech'
+            ? '未检测到语音，继续监听中...'
+            : `识别错误: ${e.error}`;
+        setStatus(msg);
+        if (e.error !== 'no-speech') {
+          setIsListening(false);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+        setStatus('已停止');
+      };
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interimText = '';
+        let finalText = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const r = event.results[i];
+          if (r.isFinal) {
+            finalText += r[0].transcript;
+          } else {
+            interimText += r[0].transcript;
+          }
+        }
+
+        if (interimText && interimText.trim()) {
+          onInterim(interimText.trim());
+        }
+        if (finalText && finalText.trim()) {
+          onFinal(finalText.trim());
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+    },
+    [language]
+  );
 
   const stop = useCallback(() => {
-    if (recognitionRef.current) { recognitionRef.current.stop(); setIsListening(false); }
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+      setIsListening(false);
+      setStatus('已停止');
+    }
   }, []);
 
-  return {
-    isListening, isSupported, status, start, stop,
-    setOnInterim: (fn) => { onInterimRef.current = fn; },
-    setOnFinal: (fn) => { onFinalRef.current = fn; }
-  };
+  return { isListening, isSupported, status, start, stop };
 }
