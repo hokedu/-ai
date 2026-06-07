@@ -7,6 +7,7 @@ interface SubtitleEntry {
   mode: 'interim' | 'final';
   confidence: number;
   timestamp: number;
+  sentiment?: SentimentInfo;
 }
 
 interface CorrectionEvent {

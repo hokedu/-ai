@@ -47,3 +47,24 @@ declare var webkitSpeechRecognition: {
   new(): SpeechRecognition;
   prototype: SpeechRecognition;
 };
+
+interface SentimentInfo {
+  emotion: 'happy' | 'sad' | 'angry' | 'urgent' | 'calm' | 'neutral' | 'excited' | 'confused';
+  intensity: number;  // 0.0 - 1.0
+  confidence: number; // 0 - 100
+}
+
+// Document Picture-in-Picture API (Chrome 116+)
+interface DocumentPictureInPicture {
+  requestWindow(options?: { width?: number; height?: number }): Promise<Window>;
+}
+
+interface Window {
+  documentPictureInPicture?: DocumentPictureInPicture;
+  electronAPI?: {
+    openPip: () => void;
+    closePip: () => void;
+    isPipOpen: () => Promise<boolean>;
+    onPipClosed: (callback: () => void) => () => void;
+  };
+}

@@ -4,6 +4,7 @@ import { useSystemAudioCapture } from './hooks/useSystemAudioCapture';
 import { useWebSocket } from './hooks/useWebSocket';
 import SubtitleOverlay from './components/SubtitleOverlay';
 import TranslationHistory from './components/TranslationHistory';
+import { usePiPWindow } from './hooks/usePiPWindow';
 import type { SubtitleEntry, CorrectionEvent } from './components/SubtitleOverlay';
 
 const WS_PORT = window.location.port || '3000';
@@ -24,6 +25,13 @@ interface TranslationFolder {
   createdAt: number;
 }
 
+interface FavoriteCollection {
+  id: string;
+  name: string;
+  entries: SubtitleEntry[];
+  createdAt: number;
+}
+
 function App() {
   const [language, setLanguage] = useState('en-US');
   const [audioSource, setAudioSource] = useState<'mic' | 'system'>('mic');
@@ -38,6 +46,25 @@ function App() {
   const [folderMenuOpen, setFolderMenuOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [historyOpen, setHistoryOpen] = useState(true);
+
+  // ── Floating window state (tracked for PiP sync + favorites) ──
+  const [floatingEntries, setFloatingEntries] = useState<SubtitleEntry[]>([]);
+
+  // ── Favorites ──
+  const [favorites, setFavorites] = useState<FavoriteCollection[]>([]);
+
+  // ── Environment detection ──
+  const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
+  const [electronPipOpen, setElectronPipOpen] = useState(false);
+
+  // Track Electron PiP window close
+  useEffect(() => {
+    if (!isElectron) return;
+    const cleanup = (window as any).electronAPI.onPipClosed(() => {
+      setElectronPipOpen(false);
+    });
+    return cleanup;
+  }, [isElectron]);
 
   const folderMenuRef = useRef<HTMLDivElement>(null);
   const { isConnected, lastMessage, sendMessage } = useWebSocket(WS_URL);
@@ -62,7 +89,6 @@ function App() {
 
   const meterCells = useMemo(() => {
     return Array.from({ length: 8 }, (_, index) => {
-      // Log-scale threshold: lower bars light up easily, higher bars need louder input
       const threshold = Math.pow(index / 7, 1.6) * 0.7 + 0.03;
       const active = activeAudioLevel >= threshold;
       const intensity = active ? Math.min(1, (activeAudioLevel - threshold) / (1 - threshold) + 0.2) : 0;
@@ -78,6 +104,7 @@ function App() {
   useEffect(() => {
     if (!lastMessage) return;
 
+    // Update folder entries
     setFolders((prevFolders) => {
       return prevFolders.map((folder) => {
         if (folder.id !== selectedFolderId) return folder;
@@ -104,6 +131,19 @@ function App() {
           case 'reset_ack': {
             return folder;
           }
+          case 'sentiment': {
+            const sentimentInfo: SentimentInfo = {
+              emotion: (lastMessage.emotion as SentimentInfo['emotion']) || 'neutral',
+              intensity: lastMessage.intensity ?? 0.5,
+              confidence: lastMessage.confidence ?? 50,
+            };
+            return {
+              ...folder,
+              entries: folder.entries.map((e) =>
+                e.id === lastMessage.id ? { ...e, sentiment: sentimentInfo } : e
+              ),
+            };
+          }
           case 'correction': {
             const correction: CorrectionEvent = {
               id: lastMessage.id || '',
@@ -124,6 +164,42 @@ function App() {
         }
       });
     });
+
+    // Also update floating entries for the floating subtitle window
+    setFloatingEntries((prev) => {
+      switch (lastMessage.type) {
+        case 'translation': {
+          if (lastMessage.mode !== 'final') return prev;
+          const entry: SubtitleEntry = {
+            id: lastMessage.id || `${Date.now()}`,
+            source: lastMessage.source || '',
+            translation: lastMessage.translation || '',
+            mode: 'final',
+            confidence: lastMessage.confidence || 85,
+            timestamp: lastMessage.timestamp || Date.now()
+          };
+          const idx = prev.findIndex((e) => e.id === entry.id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = entry;
+            return next;
+          }
+          return [...prev, entry];
+        }
+        case 'correction': {
+          return prev.map((e) =>
+            e.id === lastMessage.id
+              ? { ...e, translation: lastMessage.newTranslation || e.translation, confidence: Math.min(100, e.confidence + 10) }
+              : e
+          );
+        }
+        case 'reset_ack': {
+          return [];
+        }
+        default:
+          return prev;
+      }
+    });
   }, [lastMessage, selectedFolderId]);
 
   useEffect(() => {
@@ -139,7 +215,13 @@ function App() {
 
   const handleStart = useCallback(() => {
     if (audioSource === 'system') {
-      // System audio mode: capture → send PCM chunks → server STT → translate
+      // Open floating subtitle window
+      if (isElectron) {
+        (window as any).electronAPI.openPip();
+        setElectronPipOpen(true);
+      } else {
+        pip.open();
+      }
       const langMap: Record<string, string> = {
         'en-US': 'en', 'ja-JP': 'ja', 'ko-KR': 'ko', 'zh-CN': 'zh',
       };
@@ -148,7 +230,6 @@ function App() {
         sendMessageRef.current({ type: 'audio-chunk', data: base64Pcm });
       });
     } else {
-      // Mic mode: browser STT → send text → server translate
       startRecognition(
         (text: string) => {
           const id = 'interim-current';
@@ -200,7 +281,62 @@ function App() {
           : folder
       )
     );
+    setFloatingEntries([]);
   }, [isListening, isCapturing, stopRecognition, stopSysCapture, selectedFolderId]);
+
+  // ── PiP window actions ──
+  const handlePiPClear = useCallback(() => {
+    setFloatingEntries([]);
+  }, []);
+
+  const handlePiPSave = useCallback((entries: SubtitleEntry[]) => {
+    if (entries.length === 0) return;
+    const id = `fav-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const name = `收藏 ${new Date().toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+    const collection: FavoriteCollection = {
+      id,
+      name,
+      entries: [...entries],
+      createdAt: Date.now(),
+    };
+    setFavorites((prev) => [...prev, collection]);
+  }, []);
+
+  const handlePiPClose = useCallback(() => {
+    // PiP window already closed by the user; no extra state needed
+  }, []);
+
+  const pip = usePiPWindow(floatingEntries, handlePiPSave, handlePiPClear, handlePiPClose, isElectron);
+
+  // ── Electron mode: sync floating entries to pip window via BroadcastChannel ──
+  useEffect(() => {
+    if (!isElectron) return;
+    const channel = new BroadcastChannel('pip-subtitles');
+    channel.postMessage({ type: 'sync', entries: floatingEntries });
+    return () => channel.close();
+  }, [floatingEntries, isElectron]);
+
+  // ── Electron mode: listen for pip window actions (save/clear/close) ──
+  useEffect(() => {
+    if (!isElectron) return;
+    const channel = new BroadcastChannel('pip-subtitles');
+    channel.onmessage = (event) => {
+      const msg = event.data;
+      switch (msg.type) {
+        case 'clear':
+          setFloatingEntries([]);
+          break;
+        case 'save':
+          handlePiPSave(msg.entries || []);
+          break;
+        case 'close':
+          (window as any).electronAPI?.closePip();
+          setElectronPipOpen(false);
+          break;
+      }
+    };
+    return () => channel.close();
+  }, [isElectron, handlePiPSave]);
 
   const stats = useMemo(() => ({
     totalCorrections: selectedFolder.corrections.length,
@@ -240,6 +376,10 @@ function App() {
     setSelectedFolderId(id);
     setFolderMenuOpen(false);
   }, [isListening, isCapturing]);
+
+  const deleteFavorite = useCallback((id: string) => {
+    setFavorites((prev) => prev.filter((f) => f.id !== id));
+  }, []);
 
   const targetLabel = TARGET_LABELS[language] || '中文';
 
@@ -320,6 +460,24 @@ function App() {
             {isListening ? '⏹ 停止' : isCapturing ? '⏹ 停止捕获' : audioSource === 'system' ? '🖥️ 开始系统音频翻译' : '🎤 开始翻译'}
           </button>
 
+          {(isElectron || pip.isSupported) && (
+            <button
+              onClick={() => {
+                if (isElectron) {
+                  (window as any).electronAPI.openPip();
+                  setElectronPipOpen(true);
+                } else {
+                  pip.open();
+                }
+              }}
+              className="btn btn-ghost"
+              disabled={isElectron ? electronPipOpen : pip.isOpen}
+              title={isElectron ? '打开悬浮字幕窗（无边框置顶浮窗）' : '打开悬浮字幕窗（可跨标签页显示）'}
+            >
+              📺 {(isElectron ? electronPipOpen : pip.isOpen) ? '已开启' : '浮窗'}
+            </button>
+          )}
+
           <div ref={folderMenuRef} className="folder-menu">
             <button
               onClick={() => setFolderMenuOpen((open) => !open)}
@@ -378,7 +536,62 @@ function App() {
         stats={stats}
         isOpen={historyOpen}
         onToggle={() => setHistoryOpen((v) => !v)}
+        sourceLanguage={language}
       />
+
+      {/* ── 我的收藏 ── */}
+      <div className="favorites-panel">
+        <button
+          className="history-toggle"
+          onClick={() => setHistoryOpen((v) => !v)}
+          style={{ display: 'none' }}
+          aria-hidden="true"
+        />
+        <div className="fav-header">
+          <span className="fav-title">
+            ⭐ 我的收藏
+            <span className="history-stats-inline">
+              <span>{favorites.length} 组</span>
+            </span>
+          </span>
+        </div>
+        <div className="fav-body">
+          {favorites.length === 0 ? (
+            <p className="history-empty-state">悬浮窗保存的字幕将出现在这里</p>
+          ) : (
+            <ul className="fav-list">
+              {favorites.map((fav) => (
+                <li key={fav.id} className="fav-collection">
+                  <div className="fav-collection-header">
+                    <span className="fav-collection-name">{fav.name}</span>
+                    <span className="fav-collection-meta">
+                      {fav.entries.length} 条 · {new Date(fav.createdAt).toLocaleString('zh-CN')}
+                    </span>
+                    <button
+                      className="folder-delete"
+                      onClick={() => deleteFavorite(fav.id)}
+                      aria-label="删除收藏"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="fav-collection-entries">
+                    {fav.entries.map((entry) => (
+                      <div key={entry.id} className="fav-entry">
+                        <span className="fav-entry-time">
+                          {new Date(entry.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </span>
+                        <p className="fav-entry-text">{entry.translation}</p>
+                      </div>
+                    ))}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
     </main>
   );
 }

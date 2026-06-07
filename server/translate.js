@@ -196,6 +196,67 @@ RULES:
     return Math.max(0, Math.min(100, score));
   }
 
+  /**
+   * Analyze the emotional sentiment of the source text.
+   * Returns emotion category, intensity (0-1), and confidence (0-100).
+   * Used to drive TTS voice modulation for emotion-preserving readout.
+   */
+  async analyzeSentiment(text, sourceLanguage = 'en-US') {
+    if (!text || text.trim().length < 3) {
+      return { emotion: 'neutral', intensity: 0.5, confidence: 60 };
+    }
+
+    const lang = TranslationEngine.LANG_MAP[sourceLanguage] || TranslationEngine.LANG_MAP['en-US'];
+    try {
+      const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            {
+              role: 'system',
+              content: `You are an emotion detector. Analyze the sentiment of the following ${lang.name} text.
+
+Output ONLY a JSON object with these fields:
+- "emotion": one of "happy", "sad", "angry", "urgent", "calm", "neutral", "excited", "confused"
+- "intensity": a number 0.0 to 1.0 indicating how strong the emotion is
+- "confidence": a number 0 to 100 indicating how confident you are in this assessment
+
+No other output. Pure JSON only.`
+            },
+            { role: 'user', content: text }
+          ],
+          max_tokens: 80,
+          temperature: 0.05,
+          stream: false,
+          response_format: { type: 'json_object' }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Sentiment API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const parsed = JSON.parse(data.choices[0].message.content.trim());
+
+      // Validate and normalize
+      const validEmotions = ['happy', 'sad', 'angry', 'urgent', 'calm', 'neutral', 'excited', 'confused'];
+      return {
+        emotion: validEmotions.includes(parsed.emotion) ? parsed.emotion : 'neutral',
+        intensity: Math.max(0, Math.min(1, Number(parsed.intensity) || 0.5)),
+        confidence: Math.max(0, Math.min(100, Number(parsed.confidence) || 60)),
+      };
+    } catch (err) {
+      console.error('Sentiment analysis failed:', err.message);
+      return { emotion: 'neutral', intensity: 0.5, confidence: 50 };
+    }
+  }
+
   registerTerm(english, chinese) {
     this.termCache.set(english.toLowerCase(), chinese);
   }

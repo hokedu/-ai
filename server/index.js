@@ -104,6 +104,16 @@ async function translateAndBroadcast(ws, session, text, id, sourceLang) {
     timestamp: entry.timestamp
   }));
 
+  // Fire sentiment analysis asynchronously (non-blocking, ~300ms latency).
+  // Sentiment drives UI emotion tags and TTS voice modulation.
+  translateEngine.analyzeSentiment(text, sourceLang).then((sentiment) => {
+    if (sentiment) {
+      ws.send(JSON.stringify({ type: 'sentiment', id, ...sentiment, timestamp: Date.now() }));
+    }
+  }).catch((err) => {
+    console.error('Sentiment analysis failed:', err.message);
+  });
+
   if (session.history.length >= 2) {
     const corrections = await correctionEngine.checkAndCorrect(
       session.history,

@@ -12,6 +12,9 @@ interface WSMessage {
   confidence?: number;
   timestamp?: number;
   message?: string;
+  // sentiment fields
+  emotion?: string;
+  intensity?: number;
 }
 
 interface UseWebSocketReturn {
